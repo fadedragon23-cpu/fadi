@@ -67,7 +67,11 @@
         const rows = text.split('\n').slice(1);
         fullData = rows.map(row => {
             const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/"/g, ''));
-            return { available: cols[1] === 'TRUE', price: cols[2], img: cols[3], name: { ar: cols[4], de: cols[5], en: cols[6] }, cat: cols[11] || 'عام' };
+            return { available: cols[1] === 'TRUE', price: cols[2], img: cols[3], name: { ar: cols[4], de: cols[5], en: cols[6] }, desc: { 
+            ar: cols[7] || "", // عمود H - الوصف العربي
+            de: cols[8] || "", // عمود I - الوصف الألماني
+            en: cols[9] || ""  // عمود J - الوصف الإنجليزي
+        }, cat: cols[11] || 'عام' };
         }).filter(i => i.available);
         updateLoyalty(); render();
     }
@@ -84,9 +88,10 @@
             <div class="menu-item">
                 <img src="${item.img}" class="menu-img">
                 <div>
-                    <h3>${item.name[currentLang]}</h3>
-                    <b style="color:#d4af37">${item.price} €</b>
-                    <button class="btn" style="padding: 2px 10px" onclick="addToCart(${idx})">+</button>
+<h3>${item.name[currentLang]}</h3>
+<p style="font-size: 0.85em; color: #666; margin: 4px 0;">${item.desc[currentLang]}</p>
+<b style="color:#d4af37">${item.price} €</b>
+<button class="btn" style="padding: 2px 10px" onclick="addToCart(${idx})">+</button>
                 </div>
             </div>`).join('');
     }
