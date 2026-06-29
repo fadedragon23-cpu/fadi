@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gourmet Café</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <style>
+        #splash { position: fixed; inset: 0; background: #f4f4f2; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f2; color: #2d2d2d; margin: 0; padding-bottom: 250px; }
+        .controls { text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; border-bottom: 2px solid #d4af37; }
+        .menu-item { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(15px); padding: 15px; margin: 15px; border-radius: 20px; display: flex; align-items: center; border: 1px solid rgba(212, 175, 55, 0.3); }
+        .menu-img { width: 90px; height: 90px; border-radius: 15px; margin-left: 15px; object-fit: cover; border: 2px solid #d4af37; }
+        .btn { padding: 8px 18px; margin: 4px; border-radius: 25px; border: 1px solid #d4af37; cursor: pointer; background: white; color: #d4af37; font-weight: bold; }
+        .cart-bar { position: fixed; bottom: 0; width: 100%; background: rgba(255, 255, 255, 0.95); padding: 15px; border-top: 2px solid #d4af37; z-index: 1000; }
+        .remove-btn { color: red; font-weight: bold; cursor: pointer; border: 1px solid red; border-radius: 50%; padding: 0 6px; }
+    </style>
+</head>
+<body>
+
+<div id="splash">
+    <div style="font-size: 60px;">☕</div>
+    <div style="text-align: center;">
+        <h2 style="margin: 5px 0;">أهلاً في المقهى الخاص بك</h2>
+        <h2 style="margin: 5px 0;">Welcome to our Café</h2>
+        <h2 style="margin: 5px 0;">Willkommen im Café</h2>
+    </div>
+</div>
+
+<div class="controls">
+    <button class="btn" onclick="setLang('ar')">AR</button>
+    <button class="btn" onclick="setLang('en')">EN</button>
+    <button class="btn" onclick="setLang('de')">DE</button>
+    <div id="filter-bar" style="margin-top:10px;"></div>
+    <div id="loyalty-ui" style="color: #d4af37; margin-top: 5px;"></div>
+</div>
+
+<div id="menu-container">جاري التحميل...</div>
+
+<div class="cart-bar">
+    <div id="cart-items" style="max-height: 100px; overflow-y: auto; margin-bottom: 10px;"></div>
+    <div style="display:flex; justify-content: center; gap: 5px;">
+        <input type="number" id="table-num" style="width:60px; border-radius:10px; border:1px solid #ccc; padding:5px; text-align:center;">
+        <span id="total-price" style="font-weight:bold; align-self:center;">0 €</span>
+        <button class="btn" style="background:green; color:white;" onclick="sendOrder()" id="order-btn">طلب</button>
+        <button class="btn" style="background:orange; color:white;" onclick="callWaiter()" id="waiter-btn">نادل</button>
+    </div>
+</div>
+
+<script>
+    // الرابط المحدث لملفكم الخاص
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQXWQlhF4N48FAWMlWsVB6ii4EZxYIDi6cX0NQ-UsqYr1T7-Fnmhw-59OKp3qMaN5PqHao-hT0GS412/pub?gid=0&single=true&output=csv';
+    const WA_PHONE = '4915217298573';
+    let fullData = [], currentLang = 'ar', currentCat = 'الكل', cart = [];
+    let orderCount = parseInt(localStorage.getItem('myCafeOrders')) || 0;
+
+    const labels = {
+        ar: { order: "طلب", waiter: "نادل", table: "طاولة", orderMsg: "طلب جديد من الطاولة", waiterMsg: "مساعدة مطلوبة للطاولة", total: "الإجمالي", empty: "السلة فارغة", all: "الكل" },
+        en: { order: "Order", waiter: "Waiter", table: "Table", orderMsg: "New order from table", waiterMsg: "Waiter needed at table", total: "Total", empty: "Cart is empty", all: "All" },
+        de: { order: "Bestellen", waiter: "Kellner", table: "Tisch", orderMsg: "Neue Bestellung von Tisch", waiterMsg: "Kellner an Tisch benötigt", total: "Gesamt", empty: "Warenkorb ist leer", all: "Alle" }
+    };
+
+    async function init() {
+        setTimeout(() => document.getElementById('splash').style.display = 'none', 2000);
+        const res = await fetch(CSV_URL);
+        const text = await res.text();
+        const rows = text.split('\n').slice(1);
+        fullData = rows.map(row => {
+            const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/"/g, ''));
+            return { available: cols[1] === 'TRUE', price: cols[2], img: cols[3], name: { ar: cols[4], de: cols[5], en: cols[6] }, cat: cols[11] || 'عام' };
+        }).filter(i => i.available);
+        updateLoyalty(); render();
+    }
+
+    function render() {
+        document.getElementById('order-btn').innerText = labels[currentLang].order;
+        document.getElementById('waiter-btn').innerText = labels[currentLang].waiter;
+        document.getElementById('table-num').placeholder = labels[currentLang].table;
+        const uniqueCats = [...new Set(fullData.map(i => i.cat))];
+        let filterHtml = `<button class="btn" onclick="currentCat='الكل'; render()">${labels[currentLang].all}</button>`;
+        filterHtml += uniqueCats.map(c => `<button class="btn" onclick="currentCat='${c}'; render()">${c}</button>`).join('');
+        document.getElementById('filter-bar').innerHTML = filterHtml;
+        document.getElementById('menu-container').innerHTML = fullData.filter(i => currentCat === 'الكل' || i.cat === currentCat).map((item, idx) => `
+            <div class="menu-item">
+                <img src="${item.img}" class="menu-img">
+                <div>
+                    <h3>${item.name[currentLang]}</h3>
+                    <b style="color:#d4af37">${item.price} €</b>
+                    <button class="btn" style="padding: 2px 10px" onclick="addToCart(${idx})">+</button>
+                </div>
+            </div>`).join('');
+    }
+
+    function setLang(l) { currentLang = l; document.documentElement.dir = (l === 'ar' ? 'rtl' : 'ltr'); render(); renderCart(); }
+    function addToCart(idx) { cart.push(fullData[idx]); renderCart(); }
+    function removeFromCart(idx) { cart.splice(idx, 1); renderCart(); }
+    function renderCart() {
+        const total = cart.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+        document.getElementById('total-price').innerText = total.toFixed(2) + " €";
+        document.getElementById('cart-items').innerHTML = cart.map((item, idx) => `
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span>${item.name[currentLang]}</span>
+                <span class="remove-btn" onclick="removeFromCart(${idx})">✖</span>
+            </div>`).join('');
+    }
+
+    function sendOrder() {
+        const table = document.getElementById('table-num').value;
+        if(!table) { alert(labels[currentLang].table); return; }
+        if(cart.length === 0) { alert(labels[currentLang].empty); return; }
+        orderCount++; localStorage.setItem('myCafeOrders', orderCount);
+        let msg = `${labels[currentLang].orderMsg} ${table}:\n` + cart.map(i => i.name[currentLang]).join('\n') + `\n${labels[currentLang].total}: ` + document.getElementById('total-price').innerText;
+        window.open(`https://wa.me/${WA_PHONE}?text=${encodeURIComponent(msg)}`, '_blank');
+        cart = []; renderCart(); updateLoyalty();
+    }
+
+    function callWaiter() {
+        const table = document.getElementById('table-num').value;
+        if(!table) { alert(labels[currentLang].table); return; }
+        window.open(`https://wa.me/${WA_PHONE}?text=${encodeURIComponent(labels[currentLang].waiterMsg + " " + table)}`, '_blank');
+    }
+
+    function updateLoyalty() { let cups = ""; for(let i=0; i<10; i++) cups += (i < (orderCount % 10) ? '☕' : '⚪'); document.getElementById('loyalty-ui').innerHTML = cups; }
+    init();
+</script>
+</body>
+</html>
